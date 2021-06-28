@@ -8,9 +8,11 @@
 , nixpkgsOverride ? ""
 , nixpkgsJsonOverride ? ""
 # Modify nixpkgs with overlays
-, nixpkgsOverlays ? []
+, nixpkgsOverlays ? [(import ./overlays/crypto)]
 , defaultSources ? import ./nix/sources.nix { pkgs = pkgsDefault; }
-, pkgsDefault ? import defaultSources.nixpkgs { inherit config system crossSystem; }
+, pkgsDefault ? import defaultSources.nixpkgs { inherit config system crossSystem ;
+  overlays = nixpkgsOverlays;
+}
 }:
 
 let
