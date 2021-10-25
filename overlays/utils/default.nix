@@ -1,7 +1,7 @@
 final: prev: let
   inherit (final) system git nixFlakes cabal writeShellScriptBin;
 in {
-  nixWrapped = writeShellScriptBin "nix" ''
+  nixWrapped = (writeShellScriptBin "nix" ''
     find_up() {
       while [[ $PWD != / ]] ; do
         if [[ -e "$1" ]]; then
@@ -27,9 +27,22 @@ in {
       }
       trap atexit EXIT
     fi
-    GC_DONT_GC=1 ${nixFlakes}/bin/nix --experimental-features "nix-command flakes" "$@"
-  '';
-  cabalWrapped = writeShellScriptBin "cabal" ''
+    GC_DONT_GC=1 ${nixFlakes}/bin/nix --allow-import-from-derivation --experimental-features "nix-command flakes" "$@"
+  '').overrideAttrs (oldAttrs: {
+    strictDeps = true;
+    buildCommand = ''
+      mkdir -p $out
+      ln -s ${nixFlakes}/* $out/
+      rm $out/{bin,share}
+      cp -r ${nixFlakes}/share $out/
+      mkdir $out/bin
+      ln -s ${nixFlakes}/bin/* $out/bin/
+      rm $out/bin/nix
+      ${oldAttrs.buildCommand}
+    '';
+  });
+  cabalWrapped = let cabal = final.cabal or final.cabal-install;
+  in (writeShellScriptBin "cabal" ''
     set -euo pipefail
 
     find_up() {
@@ -72,10 +85,15 @@ in {
       extra_cabal_opts=()
     fi
 
-    cabal=${final.cabal or final.cabal-install}/bin/cabal
+    cabal=${cabal}/bin/cabal
     >&2 echo "$cabal ''${extra_cabal_opts[@]} $@"
     exec "$cabal" "''${extra_cabal_opts[@]}" "$@"
-  '';
+  '').overrideAttrs (oldAttrs: {
+    postInstall = ''
+      ${oldAttrs.buildCommand}
+      ln -s ${cabal}/share $out/
+    '';
+  });
 
   hlintCheck = ../../tests/hlint.nix;
   shellCheck = ../../tests/shellcheck.nix;
